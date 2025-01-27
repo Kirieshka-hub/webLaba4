@@ -129,33 +129,37 @@ export default {
         const guessArray = Array.from(this.currentGuess);
         const tempWordArray = [...wordArray];
 
+        // Очищаем совпадения для текущей строки
         this.matchedPositions.clear();
-
-        // Список для отметки использованных символов
         const usedIndices = new Set();
+        
+        // Считаем сколько букв осталось в слове
+        const letterCounts = this.getLetterCounts(wordArray); 
+        const guessLetterCounts = this.getLetterCounts(guessArray); 
 
         // Точное совпадение (зелёный)
         for (let i = 0; i < this.colSize; i++) {
           if (guessArray[i] === tempWordArray[i]) {
-            this.usedKeys[guessArray[i]] = 'correct';
-            this.matchedPositions.add(i);
-            usedIndices.add(i); // Отметить индекс как использованный
-            tempWordArray[i] = null; // Убрать из доступных для проверки
+            this.usedKeys[guessArray[i]] = 'correct'; // Задаем для этой буквы статус 'correct'
+            this.matchedPositions.add(i); // Запоминаем индекс угаданной буквы
+            usedIndices.add(i); // Запоминаем использованные буквы
+            tempWordArray[i] = null; // Убираем букву из временного массива
+            letterCounts[guessArray[i]]--; // Уменьшаем счетчик для этой буквы
           }
         }
 
-        // Частичное совпадение (жёлтый), но только если буква ещё не угадана
+        // Частичное совпадение (жёлтый)
         for (let i = 0; i < this.colSize; i++) {
           if (!this.matchedPositions.has(i)) {
             const char = guessArray[i];
 
-            // Если буква есть в загаданном слове и ещё не использовалась
-            if (tempWordArray.includes(char) && !usedIndices.has(tempWordArray.indexOf(char))) {
-              this.usedKeys[char] = 'present';
-              usedIndices.add(tempWordArray.indexOf(char)); // Отметить букву как использованную
-              tempWordArray[tempWordArray.indexOf(char)] = null; // Убрать из доступных
+            // Проверяем, есть ли буква в слове и не исчерпаны ли все такие буквы
+            if (letterCounts[char] > 0 && guessLetterCounts[char] > 0) {
+              this.usedKeys[char] = 'present'; // Задаем для этой буквы статус 'present' (жёлтый)
+              letterCounts[char]--; // Уменьшаем количество оставшихся таких букв
+              guessLetterCounts[char]--; // Уменьшаем количество таких букв в текущем слове
             } else {
-              this.usedKeys[char] = 'absent';
+              this.usedKeys[char] = 'absent'; // Если буква не в слове, делаем её серой
             }
           }
         }
@@ -192,7 +196,16 @@ export default {
         console.error('Error fetching word:', error);
         return false;
       }
-    }
+    },
+
+    // Считаем, сколько раз каждая буква встречается в слове
+    getLetterCounts(wordArray) {
+      const counts = {};
+      wordArray.forEach(letter => {
+        counts[letter] = (counts[letter] || 0) + 1;
+      });
+      return counts;
+    },
   }
 };
 </script>
