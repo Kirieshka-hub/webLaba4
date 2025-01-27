@@ -18,6 +18,9 @@ export default {
       } catch (error) {
         console.error(error)
       }
+    },
+    goToGame() {
+      this.router.push('/game');  // Переход в игру
     }
   },
   async mounted() {
@@ -32,6 +35,7 @@ export default {
     <p>Hi there {{ authStore.user?.username }}!</p>
     <p>You are logged in.</p>
     <button @click="logout">Logout</button>
+    <button @click="goToGame">Play Game</button> <!-- Кнопка для игры -->
   </div>
   <p v-else>
     You are not logged in. <router-link to="/login">Login</router-link>
