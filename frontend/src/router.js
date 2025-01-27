@@ -25,6 +25,7 @@ const routes = [
         name: 'game',
         component: Game
     }
+    
 ]
 
 const router = createRouter({

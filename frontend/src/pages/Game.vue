@@ -78,6 +78,8 @@
 
 <script>
 import Swal from 'sweetalert2'; // Импортируем SweetAlert2
+import russianWords from '../assets/russian-words.json'; // Импортируем локальный список русских слов
+import { useLanguageStore } from '../store/language.js' // Импортируем хранилище языка
 
 export default {
   data() {
@@ -85,206 +87,266 @@ export default {
       gameStarted: false,
       difficulty: 'easy', // Выбранная сложность
       rowSize: 8, // Количество попыток (по умолчанию для easy)
-      colSize: 6, // Длина слова (по умолчанию для easy)
+      colSize: 5, // Длина слова (по умолчанию для easy)
       wordToGuess: '', // Загаданное слово
       currentGuess: '', // Текущая догадка
       grid: [], // Игровая сетка
-      keyboard: [
-        ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-        ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-        ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
-      ],
+      keyboard: [], // Клавиатура будет динамически изменяться
       usedKeys: {}, // Статус использованных клавиш
       currentRowIndex: 0, // Индекс текущей строки
       validatedRows: [], // Отметки валидированных строк
       pressedKeys: new Set(), // Нажатые клавиши
       isLoading: false, // Индикатор загрузки
       streak: 0, // Количество подряд отгаданных слов
-      difficultyConfig: { // Конфигурация уровней сложности
-        easy: {
-          minLength: 4,
-          maxLength: 6,
-          attempts: 8
+      languageStore: null, // Ссылка на хранилище языка
+      languageConfig: { // Конфигурация языков
+        en: {
+          keyboardLayout: [
+            ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+            ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+            ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+          ],
+          difficultyConfig: {
+            easy: { minLength: 4, maxLength: 6, attempts: 8 },
+            medium: { minLength: 6, maxLength: 8, attempts: 6 },
+            hard: { minLength: 8, maxLength: 10, attempts: 4 }
+          },
+          api: {
+            generateWord: 'https://random-word-api.herokuapp.com/word',
+            validateWord: 'https://api.dictionaryapi.dev/api/v2/entries/en/'
+          }
         },
-        medium: {
-          minLength: 6,
-          maxLength: 8,
-          attempts: 6
-        },
-        hard: {
-          minLength: 8,
-          maxLength: 10,
-          attempts: 4
+        ru: {
+          keyboardLayout: [
+            ['Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З', 'Х', 'Ъ'],
+            ['Ф', 'Ы', 'В', 'А', 'П', 'Р', 'О', 'Л', 'Д', 'Ж', 'Э'],
+            ['Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь', 'Б', 'Ю']
+          ],
+          difficultyConfig: {
+            easy: { minLength: 3, maxLength: 5, attempts: 8 },
+            medium: { minLength: 6, maxLength: 8, attempts: 6 },
+            hard: { minLength: 8, maxLength: 10, attempts: 4 }
+          },
+          api: {
+            generateWord: '', // Пусто, используем локальный список
+            validateWord: '' // Пусто, используем локальный список
+          }
         }
       }
     };
   },
   mounted() {
-    window.addEventListener('keydown', this.handleKeyboardInput);
-    // Загрузка сохранённых данных (если требуется)
-    const savedStreak = localStorage.getItem('streak');
-    if (savedStreak) this.streak = parseInt(savedStreak);
+    this.languageStore = useLanguageStore()
+    window.addEventListener('keydown', this.handleKeyboardInput)
+    // Загрузка сохранённых данных
+    const savedStreak = localStorage.getItem('streak')
+    if (savedStreak) this.streak = parseInt(savedStreak)
+
+    // Установка клавиатуры при монтировании
+    this.setKeyboard()
   },
   beforeUnmount() {
-    window.removeEventListener('keydown', this.handleKeyboardInput);
-    // Сохранение данных (если требуется)
-    localStorage.setItem('streak', this.streak);
+    window.removeEventListener('keydown', this.handleKeyboardInput)
+    // Сохранение данных
+    localStorage.setItem('streak', this.streak)
+  },
+  watch: {
+    // Следим за изменением языка
+    'languageStore.language'(newLang) {
+      this.setKeyboard()
+      if (this.gameStarted) {
+        this.resetGame()
+        this.startGame()
+      }
+    }
   },
   methods: {
+    setKeyboard() {
+      const lang = this.languageStore.language
+      this.keyboard = this.languageConfig[lang].keyboardLayout
+    },
+
     // Метод для запуска игры
     async startGame() {
-      this.gameStarted = true;
-      this.isLoading = true; // Показываем индикатор загрузки
+      this.gameStarted = true
+      this.isLoading = true // Показываем индикатор загрузки
 
-      // Получаем конфигурацию выбранного уровня сложности
-      const config = this.difficultyConfig[this.difficulty];
+      // Получаем конфигурацию выбранного языка
+      const langConfig = this.languageConfig[this.languageStore.language]
+
+      // Получаем конфигурацию выбранной сложности
+      const config = langConfig.difficultyConfig[this.difficulty]
 
       // Выбираем случайную длину слова в заданном диапазоне
-      const wordLength = this.getRandomInt(config.minLength, config.maxLength);
+      const wordLength = this.getRandomInt(config.minLength, config.maxLength)
 
       // Устанавливаем количество строк (попыток) и столбцов (длину слова)
-      this.rowSize = config.attempts;
-      this.colSize = wordLength;
+      this.rowSize = config.attempts
+      this.colSize = wordLength
+
+      // Устанавливаем клавиатуру
+      this.keyboard = langConfig.keyboardLayout
 
       try {
-        // Генерируем слово для угадывания через Random Word API
-        this.wordToGuess = await this.generateWord(this.colSize).then(word => word.toUpperCase());
+        // Генерируем слово для угадывания через API выбранного языка или локальный список
+        this.wordToGuess = await this.generateWord(this.colSize).then(word => word.toUpperCase())
 
         // Инициализируем игровую сетку
-        this.grid = Array.from({ length: this.rowSize }, () => Array(this.colSize).fill(null));
-        this.validatedRows = Array.from({ length: this.rowSize }, () => false);
-        this.currentGuess = '';
-        this.currentRowIndex = 0;
-        this.usedKeys = {};
+        this.grid = Array.from({ length: this.rowSize }, () => Array(this.colSize).fill(null))
+        this.validatedRows = Array.from({ length: this.rowSize }, () => false)
+        this.currentGuess = ''
+        this.currentRowIndex = 0
+        this.usedKeys = {}
       } catch (error) {
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Failed to start the game. Please try again.',
-        });
-        this.resetGame();
+          text: this.languageStore.language === 'en' ? 'Failed to start the game. Please try again.' : 'Не удалось запустить игру. Пожалуйста, попробуйте ещё раз.',
+        })
+        this.resetGame()
       } finally {
-        this.isLoading = false; // Скрываем индикатор загрузки
+        this.isLoading = false // Скрываем индикатор загрузки
       }
     },
 
     // Вспомогательный метод для получения случайного числа между min и max (включительно)
     getRandomInt(min, max) {
-      return Math.floor(Math.random() * (max - min + 1)) + min;
+      return Math.floor(Math.random() * (max - min + 1)) + min
     },
 
-    // Метод для генерации слова через Random Word API
+    // Метод для генерации слова через API выбранного языка или локальный список
     async generateWord(size) {
-      try {
-        const response = await fetch(`https://random-word-api.herokuapp.com/word?number=1&length=${size}`);
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
-        }
+      const lang = this.languageStore.language
+      if (lang === 'en') {
+        // Используем API для английских слов
+        try {
+          const langConfig = this.languageConfig[lang]
+          const response = await fetch(`${langConfig.api.generateWord}?number=1&length=${size}`)
+          if (!response.ok) {
+            throw new Error(`API error: ${response.statusText}`)
+          }
 
-        const data = await response.json();
-        if (data.length > 0) {
-          return data[0].toUpperCase();
-        } else {
-          throw new Error('No word returned from API.');
+          const data = await response.json()
+          if (data.length > 0) {
+            return data[0]
+          } else {
+            throw new Error('No word returned from API.')
+          }
+        } catch (error) {
+          console.error('Error fetching word from API:', error)
+          throw new Error('Unable to fetch word from API.')
         }
-      } catch (error) {
-        console.error('Error fetching word from API:', error);
-        throw new Error('Unable to fetch word from API.');
+      } else if (lang === 'ru') {
+        // Используем локальный список для русского языка
+        const filteredWords = russianWords.filter(word => word.length === size)
+        if (filteredWords.length === 0) {
+          throw new Error('No words found for the specified length.')
+        }
+        const randomIndex = this.getRandomInt(0, filteredWords.length - 1)
+        return filteredWords[randomIndex].toUpperCase()
       }
     },
 
     // Обработчик нажатий на клавиатуру
     handleKeyboardInput(event) {
-      const key = event.key.toUpperCase();
+      const key = event.key.toUpperCase()
       if (key === 'BACKSPACE') {
-        this.handleBackspace();
+        this.handleBackspace()
       } else if (this.keyboard.flat().includes(key)) {
-        this.handleKeyPress(key);
+        this.handleKeyPress(key)
       } else if (key === 'ENTER') {
-        this.submitGuess();
+        this.submitGuess()
       }
     },
 
     // Обработчик нажатия на клавиши
     handleKeyPress(key) {
       if (this.currentGuess.length < this.colSize && this.currentRowIndex < this.rowSize) {
-        this.currentGuess += key;
-        this.grid[this.currentRowIndex][this.currentGuess.length - 1] = { letter: key, status: '' };
-        this.pressedKeys.add(key);
-        setTimeout(() => this.pressedKeys.delete(key), 200);
+        this.currentGuess += key
+        this.grid[this.currentRowIndex][this.currentGuess.length - 1] = { letter: key, status: '' }
+        this.pressedKeys.add(key)
+        setTimeout(() => this.pressedKeys.delete(key), 200)
       }
     },
 
     // Обработчик Backspace
     handleBackspace() {
       if (this.currentGuess.length > 0) {
-        const lastIndex = this.currentGuess.length - 1;
-        this.currentGuess = this.currentGuess.slice(0, -1);
-        this.grid[this.currentRowIndex][lastIndex] = null;
+        const lastIndex = this.currentGuess.length - 1
+        this.currentGuess = this.currentGuess.slice(0, -1)
+        this.grid[this.currentRowIndex][lastIndex] = null
       }
     },
 
     // Метод для отправки догадки
     async submitGuess() {
       if (this.currentGuess.length === this.colSize) {
-        const isValid = await this.isValidWord(this.currentGuess);
+        const isValid = await this.isValidWord(this.currentGuess)
         if (!isValid) {
           Swal.fire({
             icon: 'error',
-            title: 'Invalid Word',
-            text: 'The word does not exist!',
-          });
-          this.currentGuess = '';
-          this.grid[this.currentRowIndex] = Array(this.colSize).fill(null);
-          return;
+            title: this.languageStore.language === 'en' ? 'Invalid Word' : 'Недопустимое слово',
+            text: this.languageStore.language === 'en' ? 'The word does not exist!' : 'Слово не существует!',
+          })
+          this.currentGuess = ''
+          this.grid[this.currentRowIndex] = Array(this.colSize).fill(null)
+          return
         }
 
-        const wordArray = Array.from(this.wordToGuess);
-        const guessArray = Array.from(this.currentGuess);
-        const letterCounts = {};
+        const lang = this.languageStore.language
+
+        let wordArray = Array.from(this.wordToGuess)
+        let guessArray = Array.from(this.currentGuess)
+        let letterCounts = {}
+
+        if (lang === 'ru') {
+          // Нормализация к верхнему регистру для русского языка
+          wordArray = wordArray.map(letter => letter.toUpperCase())
+          guessArray = guessArray.map(letter => letter.toUpperCase())
+        }
 
         // Подсчитываем количество каждой буквы в загаданном слове
         wordArray.forEach(letter => {
-          letterCounts[letter] = (letterCounts[letter] || 0) + 1;
-        });
+          letterCounts[letter] = (letterCounts[letter] || 0) + 1
+        })
 
         // Массив для статусов каждой буквы в догадке
-        const statuses = Array(this.colSize).fill('absent');
+        const statuses = Array(this.colSize).fill('absent')
 
         // Первый проход: проверка точных совпадений (correct)
         for (let i = 0; i < this.colSize; i++) {
           if (guessArray[i] === wordArray[i]) {
-            statuses[i] = 'correct';
-            letterCounts[guessArray[i]]--;
+            statuses[i] = 'correct'
+            letterCounts[guessArray[i]]--
           }
         }
 
         // Второй проход: проверка присутствия букв (present)
         for (let i = 0; i < this.colSize; i++) {
-          if (statuses[i] === 'correct') continue;
-          const currentLetter = guessArray[i];
+          if (statuses[i] === 'correct') continue
+          const currentLetter = guessArray[i]
           if (wordArray.includes(currentLetter) && letterCounts[currentLetter] > 0) {
-            statuses[i] = 'present';
-            letterCounts[currentLetter]--;
+            statuses[i] = 'present'
+            letterCounts[currentLetter]--
           }
         }
 
         // Обновляем usedKeys с учётом приоритета статусов
         for (let i = 0; i < this.colSize; i++) {
-          const status = statuses[i];
-          const letter = guessArray[i];
+          const status = statuses[i]
+          const letter = guessArray[i]
           if (status === 'correct') {
             // Если уже 'correct', оставляем его
-            this.usedKeys[letter] = 'correct';
+            this.usedKeys[letter] = 'correct'
           } else if (status === 'present') {
             // Если уже 'correct', не изменяем
             if (this.usedKeys[letter] !== 'correct') {
-              this.usedKeys[letter] = 'present';
+              this.usedKeys[letter] = 'present'
             }
           } else if (status === 'absent') {
             // Только если буква ещё не была отмечена как 'correct' или 'present'
             if (!['correct', 'present'].includes(this.usedKeys[letter])) {
-              this.usedKeys[letter] = 'absent';
+              this.usedKeys[letter] = 'absent'
             }
           }
         }
@@ -294,51 +356,52 @@ export default {
           this.grid[this.currentRowIndex][i] = {
             letter: guessArray[i],
             status: statuses[i]
-          };
+          }
         }
 
-        this.validatedRows[this.currentRowIndex] = true;
-        this.animateMatchedLetters();
+        this.validatedRows[this.currentRowIndex] = true
+        this.animateMatchedLetters()
 
         // Проверка догадки до очистки с паузой
         if (this.currentGuess.toUpperCase() === this.wordToGuess.toUpperCase()) {
-          this.streak += 1; // Увеличиваем стрик
-          await this.delay(500); // Пауза 0.5 секунды
+          this.streak += 1 // Увеличиваем стрик
+          await this.delay(500) // Пауза 0.5 секунды
           Swal.fire({
             icon: 'success',
-            title: 'Congratulations!',
-            text: 'You guessed the word!',
-          });
-          this.resetGame(); // Сбрасываем текущую игру
-          this.startGame(); // Начинаем новый раунд
-          return; // Прекратить дальнейшее выполнение
+            title: this.languageStore.language === 'en' ? 'Congratulations!' : 'Поздравляем!',
+            text: this.languageStore.language === 'en' ? 'You guessed the word!' : 'Вы угадали слово!',
+          })
+          this.resetGame() // Сбрасываем текущую игру
+          this.startGame() // Начинаем новый раунд
+          return // Прекратить дальнейшее выполнение
         }
 
-        this.currentGuess = '';
-        this.currentRowIndex++;
+        // Переходим к следующей строке
+        this.currentGuess = ''
+        this.currentRowIndex++
         if (this.currentRowIndex >= this.rowSize) {
-          await this.delay(500); // Пауза 0.5 секунды
+          await this.delay(500) // Пауза 0.5 секунды
           Swal.fire({
             icon: 'info',
-            title: 'Game Over',
-            text: `The word was: ${this.wordToGuess}`,
-          });
-          this.streak = 0; // Сбрасываем стрик
-          this.resetGame(); // Сбрасываем текущую игру
+            title: this.languageStore.language === 'en' ? 'Game Over' : 'Игра окончена',
+            text: this.languageStore.language === 'en' ? `The word was: ${this.wordToGuess}` : `Загаданное слово: ${this.wordToGuess}`,
+          })
+          this.streak = 0 // Сбрасываем стрик
+          this.resetGame() // Сбрасываем текущую игру
         }
       }
     },
 
     // Метод для сброса игры
     resetGame() {
-      this.gameStarted = false;
-      this.wordToGuess = '';
-      this.currentGuess = '';
-      this.grid = [];
-      this.usedKeys = {};
-      this.currentRowIndex = 0;
-      this.validatedRows = [];
-      this.pressedKeys = new Set();
+      this.gameStarted = false
+      this.wordToGuess = ''
+      this.currentGuess = ''
+      this.grid = []
+      this.usedKeys = {}
+      this.currentRowIndex = 0
+      this.validatedRows = []
+      this.pressedKeys = new Set()
     },
 
     // Метод для анимации совпавших букв (можно реализовать по желанию)
@@ -348,39 +411,46 @@ export default {
 
     // Метод для получения класса для ячейки
     getCellClass(rowIndex, colIndex) {
-      if (!this.validatedRows[rowIndex]) return '';
-      const cell = this.grid[rowIndex][colIndex];
-      if (!cell) return '';
-      return cell.status;
+      if (!this.validatedRows[rowIndex]) return ''
+      const cell = this.grid[rowIndex][colIndex]
+      if (!cell) return ''
+      return cell.status
     },
 
     // Метод для получения класса для клавиши
     getKeyClass(key) {
-      return this.usedKeys[key] || '';
+      return this.usedKeys[key] || ''
     },
 
     // Метод для проверки, нажата ли клавиша
     isKeyPressed(key) {
-      return this.pressedKeys.has(key);
+      return this.pressedKeys.has(key)
     },
 
-    // Метод для проверки существования слова через API
+    // Метод для проверки существования слова через API или локальный список
     async isValidWord(word) {
-      try {
-        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
-        return response.ok;
-      } catch (error) {
-        console.error('Error fetching word:', error);
-        return false;
+      const lang = this.languageStore.language
+      if (lang === 'en') {
+        try {
+          const langConfig = this.languageConfig[lang]
+          const response = await fetch(`${langConfig.api.validateWord}${word.toLowerCase()}`)
+          return response.ok
+        } catch (error) {
+          console.error('Error fetching word:', error)
+          return false
+        }
+      } else if (lang === 'ru') {
+        // Проверка наличия слова в локальном списке
+        return russianWords.includes(word.toLowerCase())
       }
     },
 
     // Метод для добавления паузы
     delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
+      return new Promise(resolve => setTimeout(resolve, ms))
     }
   }
-};
+}
 </script>
 
 <style>
