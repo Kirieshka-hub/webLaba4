@@ -33,10 +33,10 @@ export default {
   <h1 v-if="!authStore.isAuthenticated">Welcome to the home page</h1>
   <div v-if="authStore.isAuthenticated">
     <h1>Write a name of user to start</h1>
-    <div class="search-container">
+    <!-- <div class="search-container">
       <input type="text" v-model="searchQuery" placeholder="Search for players..." />
       <button @click="searchPlayers">Search</button>
-    </div>
+    </div> -->
     <p>Hi there {{ authStore.user?.username }}!</p>
     <p>You are logged in.</p>
     <button @click="logout">Logout</button>
