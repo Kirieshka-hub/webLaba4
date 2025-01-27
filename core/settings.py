@@ -46,6 +46,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]  # We add your frontend URL here.
 CSRF_TRUSTED_ORIGINS = ['http://localhost:5173']  # We add your frontend URL here.
 
+WORDNIK_API_KEY = 'your_wordnik_api_key'
 
 
 MIDDLEWARE = [

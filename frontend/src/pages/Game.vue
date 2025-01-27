@@ -3,6 +3,9 @@
     <!-- Экран выбора сложности -->
     <div class="start-screen" v-if="!gameStarted">
       <h1>Word Guessing Game</h1>
+      <!-- <div class="stats">
+        <p>Streak: {{ streak }}</p>
+      </div> -->
       <label>Choose Difficulty:</label>
       <div class="difficulty-options">
         <label>
@@ -21,6 +24,11 @@
 
     <!-- Экран игры -->
     <div v-else class="game">
+      <!-- Заголовок игрового экрана -->
+      <div class="header">
+        <h2>Streak: {{ streak }}</h2>
+      </div>
+
       <!-- Индикатор загрузки -->
       <div v-if="isLoading" class="loading">
         <div class="spinner"></div>
@@ -91,6 +99,7 @@ export default {
       validatedRows: [], // Отметки валидированных строк
       pressedKeys: new Set(), // Нажатые клавиши
       isLoading: false, // Индикатор загрузки
+      streak: 0, // Количество подряд отгаданных слов
       difficultyConfig: { // Конфигурация уровней сложности
         easy: {
           minLength: 4,
@@ -112,9 +121,14 @@ export default {
   },
   mounted() {
     window.addEventListener('keydown', this.handleKeyboardInput);
+    // Загрузка сохранённых данных (если требуется)
+    const savedStreak = localStorage.getItem('streak');
+    if (savedStreak) this.streak = parseInt(savedStreak);
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKeyboardInput);
+    // Сохранение данных (если требуется)
+    localStorage.setItem('streak', this.streak);
   },
   methods: {
     // Метод для запуска игры
@@ -133,7 +147,7 @@ export default {
       this.colSize = wordLength;
 
       try {
-        // Генерируем слово для угадывания
+        // Генерируем слово для угадывания через Random Word API
         this.wordToGuess = await this.generateWord(this.colSize).then(word => word.toUpperCase());
 
         // Инициализируем игровую сетку
@@ -159,37 +173,23 @@ export default {
       return Math.floor(Math.random() * (max - min + 1)) + min;
     },
 
-    // Метод для генерации слова через Django прокси
+    // Метод для генерации слова через Random Word API
     async generateWord(size) {
       try {
-        const response = await fetch(`/api/random-word/?size=${size}`);
-        const data = await response.json();
+        const response = await fetch(`https://random-word-api.herokuapp.com/word?number=1&length=${size}`);
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
 
-        if (data.word) {
-          return data.word;
+        const data = await response.json();
+        if (data.length > 0) {
+          return data[0].toUpperCase();
         } else {
-          throw new Error(data.error || 'No word returned.');
+          throw new Error('No word returned from API.');
         }
       } catch (error) {
-        console.error('Error fetching word from backend:', error);
-
-        // Резервный вариант — использование локальных слов
-        const fallbackWords = {
-          4: ['TREE', 'GAME', 'PLAY'],
-          5: ['APPLE', 'GRAPE', 'HOUSE'],
-          6: ['SCHOOL', 'DOUBLE', 'COOKER'],
-          7: ['PROGRAM', 'BARRIER', 'NETWORK'],
-          8: ['COMPUTER', 'LANGUAGE', 'KEYBOARD'],
-          9: ['LANGUAGE', 'HARDWARE', 'FIREWALL'],
-          10: ['DEVELOPMENT', 'INTERACTIVE', 'FUNCTIONAL']
-        };
-
-        const words = fallbackWords[size];
-        if (words && words.length > 0) {
-          return words[Math.floor(Math.random() * words.length)];
-        } else {
-          throw new Error('No fallback words available.');
-        }
+        console.error('Error fetching word from API:', error);
+        throw new Error('Unable to fetch word from API.');
       }
     },
 
@@ -302,13 +302,15 @@ export default {
 
         // Проверка догадки до очистки с паузой
         if (this.currentGuess.toUpperCase() === this.wordToGuess.toUpperCase()) {
+          this.streak += 1; // Увеличиваем стрик
           await this.delay(500); // Пауза 0.5 секунды
           Swal.fire({
             icon: 'success',
             title: 'Congratulations!',
             text: 'You guessed the word!',
           });
-          this.resetGame();
+          this.resetGame(); // Сбрасываем текущую игру
+          this.startGame(); // Начинаем новый раунд
           return; // Прекратить дальнейшее выполнение
         }
 
@@ -321,7 +323,8 @@ export default {
             title: 'Game Over',
             text: `The word was: ${this.wordToGuess}`,
           });
-          this.resetGame();
+          this.streak = 0; // Сбрасываем стрик
+          this.resetGame(); // Сбрасываем текущую игру
         }
       }
     },
@@ -335,7 +338,6 @@ export default {
       this.usedKeys = {};
       this.currentRowIndex = 0;
       this.validatedRows = [];
-      this.matchedPositions = new Set();
       this.pressedKeys = new Set();
     },
 
@@ -392,6 +394,11 @@ export default {
 /* Экран выбора сложности */
 .start-screen {
   margin-bottom: 20px;
+}
+
+.stats {
+  margin-bottom: 10px;
+  font-size: 18px;
 }
 
 .difficulty-options {
@@ -591,5 +598,17 @@ button {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Заголовок игрового экрана */
+.header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.stats p {
+  margin: 0 15px;
+  font-size: 18px;
 }
 </style>

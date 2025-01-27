@@ -7,4 +7,5 @@ urlpatterns = [
     path('api/logout', views.logout_view, name='logout'),
     path('api/user', views.user, name='user'),
     path('api/register', views.register, name='register'),
+    # path('api/random-word/', RandomWordView.as_view(), name='random-word'),
 ]
