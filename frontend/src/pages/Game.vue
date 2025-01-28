@@ -18,7 +18,7 @@
           <input type="radio" value="hard" v-model="difficulty" /> Hard
         </label>
       </div>
-
+      <button type="button" @click="goBack">Back</button>
       <button @click="startGame">Start Game</button>
     </div>
 
@@ -448,6 +448,11 @@ export default {
     // Метод для добавления паузы
     delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms))
+    },
+
+    // Метод для навигации обратно на главную страницу
+    goBack() {
+      this.$router.push('/'); // Замените '/' на нужный маршрут, если необходимо
     }
   }
 }

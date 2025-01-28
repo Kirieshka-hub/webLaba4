@@ -38,10 +38,8 @@ export default {
 
 <template>
   <div>
-    <h1 v-if="!authStore.isAuthenticated">Welcome to the home page</h1>
-    <div v-if="authStore.isAuthenticated">
-      <h1>Word Guessing Game</h1>
-      
+    <h1>Word Guessing Game</h1>
+    <div v-if="authStore.isAuthenticated">      
       <!-- Выбор языка -->
       <div class="language-selection">
         <p>Choose Language:</p>
@@ -61,8 +59,10 @@ export default {
 
       <p>Hi there {{ authStore.user?.username }}!</p>
       <p>You are logged in.</p>
-      <button @click="logout">Logout</button>
-      <button @click="goToGame">Play Game</button> <!-- Кнопка для игры -->
+      <div class="buttons-cont">
+        <button @click="logout">Logout</button>
+        <button @click="goToGame">Play Game</button> 
+      </div>
     </div>
     <p v-else>
       You are not logged in. <router-link to="/login">Login</router-link>
@@ -75,7 +75,7 @@ export default {
   margin: 20px 0;
 }
 
-.language-selection button {
+/* .language-selection button {
   padding: 10px 20px;
   margin: 0 10px;
   font-size: 16px;
@@ -85,15 +85,15 @@ export default {
   background-color: white;
   color: #4a90e2;
   transition: background-color 0.3s ease, color 0.3s ease;
-}
+} */
 
 .language-selection button.active {
-  background-color: #4a90e2;
+  background-color:gray;
   color: white;
 }
 
 .language-selection button:hover {
-  background-color: #4a90e2;
+  background-color: gray;
   color: white;
 }
 
@@ -102,6 +102,4 @@ button {
   font-size: 16px;
   cursor: pointer;
 }
-
-/* Остальные стили остаются без изменений */
 </style>
